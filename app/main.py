@@ -1,18 +1,22 @@
 import streamlit as st
 from data.loader import carregar_excel
 from insights.insight_engine import gerar_insights
-from visualization.charts import gerar_graficos
 from analysis.column_interpreter import interpretar_colunas
 from insights.smart_insights import gerar_insights_inteligentes
 from visualization.smart_charts import gerar_graficos_inteligentes
 from reports.report_generator import gerar_relatorio
+from ui.filters import aplicar_filtros
+
+st.set_page_config(
+    page_title="Auto Insight Generator",
+    layout="wide"
+)
 
 st.title("Auto Insight Generator")
-
-st.write("Envie uma planilha Excel para análise automática")
+st.markdown("Ferramenta para análise automática de planilhas Excel.")
 
 arquivo = st.file_uploader(
-    "Upload do arquivo Excel",
+    "Faça upload de uma planilha Excel",
     type=["xlsx"]
 )
 
@@ -20,50 +24,58 @@ if arquivo is not None:
 
     df = carregar_excel(arquivo)
 
-    if df is not None:
+    if df is None:
+        st.error("Não foi possível ler a planilha. Verifique se o arquivo está no formato correto.")
+    elif df.empty:
+        st.warning("A planilha enviada está vazia.")
+    else:
+        df_filtrado = aplicar_filtros(df)
 
-        st.subheader("Preview da planilha")
+        if df_filtrado.empty:
+            st.warning("Nenhum dado encontrado com os filtros aplicados.")
+        else:
+            insights = gerar_insights(df_filtrado)
+            interpretacao = interpretar_colunas(df_filtrado)
+            analises = gerar_insights_inteligentes(df_filtrado)
+            graficos = gerar_graficos_inteligentes(df_filtrado)
 
-        st.dataframe(df)
+            st.subheader("Resumo da planilha")
 
-        st.write("Linhas:", df.shape[0])
-        st.write("Colunas:", df.shape[1])
+            col1, col2, col3 = st.columns(3)
 
-        st.subheader("Insights automáticos")
+            with col1:
+                st.metric("Linhas", df_filtrado.shape[0])
 
-        insights = gerar_insights(df)
+            with col2:
+                st.metric("Colunas", df_filtrado.shape[1])
 
-        for chave, valor in insights.items():
-            st.write(f"{chave}: {valor}")
-        st.subheader("Visualização dos dados")
+            with col3:
+                coluna_analisada = insights.get("coluna_analisada", "N/A")
+                st.metric("Coluna principal", coluna_analisada)
 
-        st.subheader("Dashboard automático")
+            with st.expander("Visualizar dados da planilha"):
+                st.dataframe(df_filtrado, use_container_width=True)
 
-        graficos = gerar_graficos(df)
+            st.subheader("Insights automáticos")
 
-        for fig in graficos:
-            st.plotly_chart(fig)
+            for chave, valor in insights.items():
+                st.write(f"**{chave}**: {valor}")
 
-        st.subheader("Interpretação das colunas")
+            st.subheader("Interpretação das colunas")
 
-        interpretacao = interpretar_colunas(df)
+            for coluna, tipo in interpretacao.items():
+                st.write(f"**{coluna}** → {tipo}")
 
-        for coluna, tipo in interpretacao.items():
-            st.write(f"{coluna} → {tipo}")
-        st.subheader("Análise automática")
+            st.subheader("Análise automática")
 
-        analises = gerar_insights_inteligentes(df)
+            for frase in analises:
+                st.write(f"- {frase}")
 
-        for frase in analises:
-            st.write(frase)
+            st.subheader("Dashboard automático")
 
-        st.subheader("Dashboard automático")
+            for grafico in graficos:
+                st.plotly_chart(grafico, use_container_width=True)
 
-        graficos = gerar_graficos_inteligentes(df)
-
-        for grafico in graficos:
-            st.plotly_chart(grafico)
-        if st.button("Gerar Relatório"):
-            caminho = gerar_relatorio(analises)
-
-            st.success("Relatório gerado!")
+            if st.button("Gerar Relatório"):
+                caminho = gerar_relatorio(analises)
+                st.success(f"Relatório gerado com sucesso: {caminho}")
